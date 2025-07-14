@@ -125,7 +125,15 @@ We will fine-tune the $\pi_0$-FAST model on the [Libero dataset](https://libero-
 
 We provide a minimal example script for converting Libero data to a LeRobot dataset in [`examples/libero/convert_libero_data_to_lerobot.py`](examples/libero/convert_libero_data_to_lerobot.py). You can easily modify it to convert your own data! You can download the raw Libero dataset from [here](https://huggingface.co/datasets/openvla/modified_libero_rlds), and run the script with:
 
+Download:
+
 ```bash
+huggingface-cli download openvla/modified_libero_rlds --repo-type dataset --local-dir ./dataset
+```
+
+```bash
+export HF_LEROBOT_HOME=./dataset/lerobot/
+uv pip install tensorflow tensorflow_datasets
 uv run examples/libero/convert_libero_data_to_lerobot.py --data_dir /path/to/your/libero/data
 ```
 
