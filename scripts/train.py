@@ -216,14 +216,20 @@ def main(config: _config.TrainConfig):
         resume=config.resume,
     )
     init_wandb(config, resuming=resuming, enabled=config.wandb_enabled)
-
+    print("1. 开始初始化 dataloader")
     data_loader = _data_loader.create_data_loader(
         config,
         sharding=data_sharding,
         shuffle=True,
     )
+    print("2. dataloader 初始化完成")
     data_iter = iter(data_loader)
-    batch = next(data_iter)
+    try:
+        batch = next(data_iter)
+        print("3. 成功获取第一个 batch")
+    except StopIteration:
+        print("3. dataloader 没有数据，直接退出")
+        exit()
     logging.info(f"Initialized data loader:\n{training_utils.array_tree_to_info(batch)}")
 
     # Log images from first batch to sanity check.

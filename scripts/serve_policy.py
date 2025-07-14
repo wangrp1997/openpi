@@ -87,26 +87,45 @@ def create_default_policy(env: EnvMode, *, default_prompt: str | None = None) ->
 
 def create_policy(args: Args) -> _policy.Policy:
     """Create a policy from the given arguments."""
+    print("create_policy: args =", args)
     match args.policy:
         case Checkpoint():
-            return _policy_config.create_trained_policy(
-                _config.get_config(args.policy.config), args.policy.dir, default_prompt=args.default_prompt
-            )
+            print("create_policy: using Checkpoint", args.policy)
+            try:
+                policy = _policy_config.create_trained_policy(
+                    _config.get_config(args.policy.config), args.policy.dir, default_prompt=args.default_prompt
+                )
+                print("create_policy: create_trained_policy 成功")
+                return policy
+            except Exception as e:
+                print("create_policy: create_trained_policy 出错：", e)
+                import traceback; traceback.print_exc()
+                raise
         case Default():
-            return create_default_policy(args.env, default_prompt=args.default_prompt)
+            print("create_policy: using Default")
+            try:
+                policy = create_default_policy(args.env, default_prompt=args.default_prompt)
+                print("create_policy: create_default_policy 成功")
+                return policy
+            except Exception as e:
+                print("create_policy: create_default_policy 出错：", e)
+                import traceback; traceback.print_exc()
+                raise
 
 
 def main(args: Args) -> None:
+    print("step 1: create_policy")
     policy = create_policy(args)
+    print("step 2: get policy metadata")
     policy_metadata = policy.metadata
 
-    # Record the policy's behavior.
     if args.record:
+        print("step 3: record policy")
         policy = _policy.PolicyRecorder(policy, "policy_records")
 
     hostname = socket.gethostname()
     local_ip = socket.gethostbyname(hostname)
-    logging.info("Creating server (host: %s, ip: %s)", hostname, local_ip)
+    print(f"step 4: Creating server (host: {hostname}, ip: {local_ip})")
 
     server = websocket_policy_server.WebsocketPolicyServer(
         policy=policy,
@@ -114,6 +133,7 @@ def main(args: Args) -> None:
         port=args.port,
         metadata=policy_metadata,
     )
+    print("step 5: start serve_forever")
     server.serve_forever()
 
 

@@ -1,5 +1,5 @@
 import logging
-
+import pathlib
 import numpy as np
 import sentencepiece
 from transformers import AutoProcessor
@@ -41,7 +41,13 @@ class FASTTokenizer:
         self._max_len = max_len
 
         # Download base PaliGemma tokenizer
-        path = download.maybe_download("gs://big_vision/paligemma_tokenizer.model", gs={"token": "anon"})
+        # path = download.maybe_download("gs://big_vision/paligemma_tokenizer.model", gs={"token": "anon"})
+
+        local_path = pathlib.Path.home() / "Projects" / "openpi" / "models" / "paligemma_tokenizer.model"
+        if local_path.exists():
+            path = local_path
+        else:
+            path = download.maybe_download("gs://big_vision/paligemma_tokenizer.model", gs={"token": "anon"})
         with path.open("rb") as f:
             self._paligemma_tokenizer = sentencepiece.SentencePieceProcessor(model_proto=f.read())
 
