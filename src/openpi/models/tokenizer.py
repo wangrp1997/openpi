@@ -43,7 +43,10 @@ class FASTTokenizer:
         # Download base PaliGemma tokenizer
         # path = download.maybe_download("gs://big_vision/paligemma_tokenizer.model", gs={"token": "anon"})
 
-        local_path = pathlib.Path.home() / "Projects" / "openpi" / "models" / "paligemma_tokenizer.model"
+        # 获取当前脚本（tokenizer.py）所在目录的上级目录
+        project_root = pathlib.Path(__file__).resolve().parent.parent.parent.parent
+        local_path = project_root / "models" / "paligemma_tokenizer.model"
+        print(local_path)
         if local_path.exists():
             path = local_path
         else:

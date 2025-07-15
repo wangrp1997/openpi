@@ -133,7 +133,7 @@ uv pip install huggingface_hub
 sudo lsof -i -P -n | grep LISTEN | grep 127.0.0.1
 export HTTPS_PROXY=http://127.0.0.1:1087
 export HTTP_PROXY=http://127.0.0.1:1087
-huggingface-cli download openvla/modified_libero_rlds --repo-type dataset --local-dir ./dataset
+huggingface-cli download openvla/modified_libero_rlds --repo-type dataset --local-dir ./dataset/libero
 ```
 
 ```bash
@@ -158,12 +158,14 @@ Before we can run training, we need to compute the normalization statistics for 
 uv run scripts/compute_norm_stats.py --config-name pi0_fast_libero
 如果报错，从下面的link下载分词器模型到./models文件夹:
 https://storage.googleapis.com/big_vision/paligemma_tokenizer.model
+curl -L -o ~/Documents/openpi/models/paligemma_tokenizer.model https://storage.googleapis.com/big_vision/paligemma_tokenizer.model
 ```
 
 Now we can kick off training with the following command (the `--overwrite` flag is used to overwrite existing checkpoints if you rerun fine-tuning with the same config):
 
 ```bash
 mkdir -p ~/.cache/openpi/openpi-assets/checkpoints/pi0_fast_base/params
+sudo snap install google-cloud-cli --classic
 gsutil cp -r gs://openpi-assets/checkpoints/pi0_fast_base/params ~/.cache/openpi/openpi-assets/checkpoints/pi0_fast_base/params/
 XLA_PYTHON_CLIENT_MEM_FRACTION=0.9 uv run scripts/train.py pi0_fast_libero --exp-name=my_experiment --overwrite
 ```
