@@ -128,6 +128,11 @@ We provide a minimal example script for converting Libero data to a LeRobot data
 Download:
 
 ```bash
+source .venv/bin/activate
+uv pip install huggingface_hub
+sudo lsof -i -P -n | grep LISTEN | grep 127.0.0.1
+export HTTPS_PROXY=http://127.0.0.1:1087
+export HTTP_PROXY=http://127.0.0.1:1087
 huggingface-cli download openvla/modified_libero_rlds --repo-type dataset --local-dir ./dataset
 ```
 
