@@ -1,5 +1,9 @@
 # Fine-tune pi0.5 on DexJoCo bimanual insertion
 
+For a detailed Chinese comparison between the DexJoCo reproduction recipe and
+the dexterous-hand adaptations in this branch, see
+[`DEXTEROUS_HAND_ADAPTATION_ZH.md`](DEXTEROUS_HAND_ADAPTATION_ZH.md).
+
 This integration targets the local LeRobot v3 dataset at
 `/mnt/ssd/datasets/dexjoco_lerobot_datasets/bimanual_assembly`.
 
