@@ -18,6 +18,7 @@ import openpi.models.pi0_config as pi0_config
 import openpi.models.pi0_fast as pi0_fast
 import openpi.models.tokenizer as _tokenizer
 import openpi.policies.aloha_policy as aloha_policy
+import openpi.policies.dexjoco_policy as dexjoco_policy
 import openpi.policies.droid_policy as droid_policy
 import openpi.policies.libero_policy as libero_policy
 import openpi.shared.download as _download
@@ -65,6 +66,8 @@ class AssetsConfig:
 class DataConfig:
     # LeRobot repo id. If None, fake data will be created.
     repo_id: str | None = None
+    # Optional local LeRobot dataset root. When set, no Hub download is required.
+    root: pathlib.Path | None = None
     # Directory within the assets directory containing the data assets.
     asset_id: str | None = None
     # Contains precomputed normalization stats. If None, normalization will not be performed.
@@ -275,6 +278,50 @@ class LeRobotAlohaDataConfig(DataConfigFactory):
             data_transforms=data_transforms,
             model_transforms=model_transforms,
             action_sequence_keys=self.action_sequence_keys,
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class LeRobotDexJocoDataConfig(DataConfigFactory):
+    """DexJoCo dual-arm LeRobot v3 data.
+
+    State is converted 46D quat -> 44D rotvec so proprio matches the action layout.
+    Absolute actions are kept: OpenPI delta subtraction is not valid for rotvec, and
+    Allegro finger joints should stay absolute.
+    """
+
+    root: pathlib.Path = pathlib.Path("/mnt/ssd/datasets/dexjoco_lerobot_datasets/bimanual_assembly")
+    default_prompt: str = "Insert the held plug into the matching socket using both hands."
+    action_sequence_keys: Sequence[str] = ("action",)
+
+    @override
+    def create(self, assets_dirs: pathlib.Path, model_config: _model.BaseModelConfig) -> DataConfig:
+        repack_transforms = _transforms.Group(
+            inputs=[
+                _transforms.RepackTransform(
+                    {
+                        "base": "observation.images.ego",
+                        "wrist_left": "observation.images.wrist_left",
+                        "wrist_right": "observation.images.wrist_right",
+                        "state": "observation.state",
+                        "actions": "action",
+                        "prompt": "prompt",
+                    }
+                )
+            ]
+        )
+        data_transforms = _transforms.Group(
+            inputs=[dexjoco_policy.DexJocoInputs(model_type=model_config.model_type)],
+            outputs=[dexjoco_policy.DexJocoOutputs()],
+        )
+        return dataclasses.replace(
+            self.create_base_config(assets_dirs, model_config),
+            root=self.root,
+            repack_transforms=repack_transforms,
+            data_transforms=data_transforms,
+            model_transforms=ModelTransformFactory(default_prompt=self.default_prompt)(model_config),
+            action_sequence_keys=self.action_sequence_keys,
+            prompt_from_task=True,
         )
 
 
@@ -823,7 +870,82 @@ _CONFIGS = [
         ),
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_base/params"),
         num_train_steps=20_000,
-        batch_size=64,
+        batch_size=32,
+    ),
+    #
+    # DexJoCo bimanual insertion. Matches the DexJoCo π0.5 LoRA recipe (60k steps,
+    # batch 32, warmup 10k, flat 5e-5). Loads a pre-expanded official pi05_base
+    # whose Allegro finger channels were NNX-initialized offline.
+    #
+    TrainConfig(
+        name="pi05_dexjoco_lora",
+        project_name="dexjoco-pi05",
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=44,
+            action_horizon=30,
+            max_token_len=250,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ),
+        data=LeRobotDexJocoDataConfig(
+            repo_id="dexjoco/bimanual_assembly",
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            # Official pi05_base expanded to 44D with Allegro fingers NNX-initialized.
+            "/home/wangrenpeng/dexjoco/checkpoints/pi05_base_action_dim_44_hand_fresh/params"
+        ),
+        freeze_filter=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=44,
+            action_horizon=30,
+            max_token_len=250,
+            paligemma_variant="gemma_2b_lora",
+            action_expert_variant="gemma_300m_lora",
+        ).get_freeze_filter(),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=10_000,
+            peak_lr=5e-5,
+            decay_steps=1_000_000,
+            decay_lr=5e-5,
+        ),
+        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
+        ema_decay=None,
+        batch_size=32,
+        num_workers=4,
+        num_train_steps=60_000,
+        save_interval=10_000,
+        keep_period=10_000,
+        checkpoint_base_dir="/mnt/ssd/checkpoints/openpi_dexjoco",
+    ),
+    TrainConfig(
+        name="pi05_dexjoco_full",
+        project_name="dexjoco-pi05",
+        model=pi0_config.Pi0Config(pi05=True, action_dim=44, action_horizon=30, max_token_len=250),
+        data=LeRobotDexJocoDataConfig(
+            repo_id="dexjoco/bimanual_assembly",
+            assets=AssetsConfig(
+                assets_dir="/home/wangrenpeng/openpi/assets/pi05_dexjoco_lora",
+                asset_id="dexjoco/bimanual_assembly",
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader(
+            "/home/wangrenpeng/dexjoco/checkpoints/pi05_base_action_dim_44_hand_fresh/params"
+        ),
+        lr_schedule=_optimizer.CosineDecaySchedule(
+            warmup_steps=10_000,
+            peak_lr=5e-5,
+            decay_steps=1_000_000,
+            decay_lr=5e-5,
+        ),
+        optimizer=_optimizer.AdamW(clip_gradient_norm=1.0),
+        ema_decay=0.999,
+        batch_size=32,
+        num_workers=4,
+        num_train_steps=60_000,
+        save_interval=10_000,
+        keep_period=10_000,
+        checkpoint_base_dir="/mnt/ssd/checkpoints/openpi_dexjoco",
     ),
     #
     # Fine-tuning DROID configs.

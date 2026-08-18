@@ -7,9 +7,13 @@ from typing import Literal, Protocol, SupportsIndex, TypeVar
 
 import jax
 import jax.numpy as jnp
-import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
 import numpy as np
 import torch
+
+try:
+    import lerobot.common.datasets.lerobot_dataset as lerobot_dataset
+except ModuleNotFoundError:
+    import lerobot.datasets.lerobot_dataset as lerobot_dataset
 
 import openpi.models.model as _model
 import openpi.training.config as _config
@@ -137,16 +141,20 @@ def create_torch_dataset(
     if repo_id == "fake":
         return FakeDataset(model_config, num_samples=1024)
 
-    dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id)
+    dataset_meta = lerobot_dataset.LeRobotDatasetMetadata(repo_id, root=data_config.root)
     dataset = lerobot_dataset.LeRobotDataset(
         data_config.repo_id,
+        root=data_config.root,
         delta_timestamps={
             key: [t / dataset_meta.fps for t in range(action_horizon)] for key in data_config.action_sequence_keys
         },
     )
 
     if data_config.prompt_from_task:
-        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(dataset_meta.tasks)])
+        tasks = dataset_meta.tasks
+        if hasattr(tasks, "iterrows"):
+            tasks = {int(row.task_index): str(prompt) for prompt, row in tasks.iterrows()}
+        dataset = TransformedDataset(dataset, [_transforms.PromptFromLeRobotTask(tasks)])
 
     return dataset
 
